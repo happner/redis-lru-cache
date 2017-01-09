@@ -1,0 +1,45 @@
+{
+  "name": "redis-lru-cache",
+  "description": "LRU cache, that relies on redis pub/sub to share data",
+  "version": "0.0.1",
+  "main": "./lib/index",
+  "scripts": {
+    "test": "mocha silence.js test/functional && node test/happn-test",
+    "test-cover": "istanbul cover _mocha -- silence.js test"
+  },
+  "keywords": [
+    "mongo",
+    "happn",
+    "happner",
+    "redis",
+    "LRU"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/happner/redis-lru-cache.git"
+  },
+  "dependencies": {
+    "async": "1.5.2",
+    "bluebird": "^2.10.2",
+    "lru-cache": "^4.0.2",
+    "mongodb": "^2.1.6",
+    "node-redis-pubsub": "^1.0.1",
+    "node-uuid": "^1.4.7",
+    "redis": "^2.6.3",
+    "sift": "^3.2.6",
+    "traverse": "0.6.6",
+    "underscore": "1.8.3",
+    "underscore.deep": "0.5.1",
+    "underscore.string": "3.2.2"
+  },
+  "devDependencies": {
+    "chai": "^3.2.0",
+    "coveralls": "^2.11.6",
+    "expect.js": "*",
+    "gulp": "^3.9.0",
+    "istanbul": "^0.4.1",
+    "mocha": "*",
+    "shortid": "^2.2.4"
+  },
+  "readmeFilename": "README.md"
+}

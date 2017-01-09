@@ -1,0 +1,12 @@
+node_modules
+.idea
+npm-debug.log
+coverage
+lib/system/activity.log*
+lib/system/data/*.nedb
+.DS_Store
+test/temp/*
+temp/*
+test/Users
+test/reports
+*.log
