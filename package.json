@@ -21,6 +21,7 @@
   "dependencies": {
     "async": "1.5.2",
     "bluebird": "^2.10.2",
+    "clone": "^2.1.0",
     "lru-cache": "^4.0.2",
     "mongodb": "^2.1.6",
     "node-redis-pubsub": "^1.0.1",

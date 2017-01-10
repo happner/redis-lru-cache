@@ -34,6 +34,8 @@ describe('stress tests', function() {
         cacheId:'redis-lru-cache'
       });
 
+      callback();
+
     }catch(e){
 
       callback(e);
@@ -56,11 +58,40 @@ describe('stress tests', function() {
 
   });
 
-  xit('gets data', function(callback) {
+  it('gets data', function(callback) {
 
+    cacheService.set('/SET_TEST/1234', {test:"data"}, function(e){
+
+      if (e) return callback(e);
+
+      cacheService.get('/SET_TEST/1234', function(e, data){
+
+        if (e) return callback(e);
+
+        expect(data.test).to.be("data");
+
+        callback();
+
+      });
+    });
   });
 
-  xit('removes data', function(callback) {
+  it('removes data', function(callback) {
+
+    cacheService.set('/SET_TEST/12345', {test:"data"}, function(e){
+
+      if (e) return callback(e);
+
+      console.log('did set:::');
+
+      cacheService.remove('/SET_TEST/12345', function(e){
+
+        if (e) return callback(e);
+
+        callback();
+
+      });
+    });
 
   });
 
