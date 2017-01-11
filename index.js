@@ -10,6 +10,17 @@ var EventEmitter = require("events").EventEmitter
   , async = require('async')
 ;
 
+function CacheError(message, cause) {
+
+  this.name = 'CacheError';
+  this.code = 500;
+  this.message = message;
+
+  if (cause) this.cause = cause;
+}
+
+CacheError.prototype = Error.prototype;
+
 function InternalCache(opts){
 
   var _this = this;
@@ -18,7 +29,7 @@ function InternalCache(opts){
 
     if (opts == null) opts = {};
 
-    if (!opts.cacheId) throw new Error('invalid or no cache id specified - caches must be identified to ensure continuity');
+    if (!opts.cacheId) throw new CacheError('invalid or no cache id specified - caches must be identified to ensure continuity');
 
     if (!opts.redisExpire) opts.redisExpire = 1000 * 60 * 30; // redis values expire after 30 minutes
 
@@ -29,6 +40,8 @@ function InternalCache(opts){
     _this.__cacheId = opts.cacheId;
 
     _this.__subscriptions = {};
+
+    _this.__systemSubscriptions = {};
 
     _this.__stats = {
       memory:0,
@@ -79,9 +92,36 @@ function InternalCache(opts){
 
     _this.__redisPubsub = new redis_pubsub(pubsubOpts);
 
+    _this.__systemSubscriptions['system/cache-reset'] = _this.__redisPubsub.on('system/cache-reset', function(message){
+
+      if (message.origin != _this.cacheNodeId) _this.__cache.reset();
+
+    });
+
+    _this.__systemSubscriptions['system/cache-reset'] = _this.__redisPubsub.on('system/cache-reset', function(message){
+
+      if (message.origin != _this.cacheNodeId) _this.__cache.reset();
+
+    });
+
+    _this.__systemSubscriptions['system/redis-error'] = _this.__redisClient.on('error', function(error){
+
+        _this.emit('error', new CacheError('redis client error', error));
+    });
+
+    _this.__systemSubscriptions['system/redis-error'] = _this.__redisPubsub.on('error', function(error){
+
+      _this.emit('error', new CacheError('redis pubsub error', error));
+    });
+
+    if (opts.clear) _this.reset(function(e){
+
+      if (e) return _this.emit('error', new CacheError('cache clear on startup failed', e));
+    });
+
   }catch(e){
 
-    throw new Error('failed with cache initialization: ' + e.toString(), e);
+    throw new CacheError('failed with cache initialization: ' + e.toString(), e);
   }
 }
 
@@ -97,7 +137,7 @@ InternalCache.prototype.__removeSubscription = function(key, callback){
 
         if (callback) callback(e);
 
-        return _this.__emit('error', new Error('failure removing redis subscription', e));
+        return _this.__emit('error', new CacheError('failure removing redis subscription, key: ' + key, e));
       }
 
       delete  _this.__subscriptions[key];
@@ -118,7 +158,9 @@ InternalCache.prototype.__updateLRUCache = function(key, item, callback){
   //update our LRU cache
   _this.__cache.set(key, item);
 
-  if (_this.__subscriptions[key]) return callback(null, item);//we already have a change listener
+  if (_this.__subscriptions[key]) {
+    return callback(null, item);//we already have a change listener
+  }
 
   //create a subscription to changes, gets whacked on the opts.dispose method
   _this.__subscriptions[key] = _this.__redisPubsub.on(key, function(message){
@@ -127,7 +169,7 @@ InternalCache.prototype.__updateLRUCache = function(key, item, callback){
 
     //origin introduced to alleviate tail chasing
     if (message.origin != _this.__cacheNodeId) return _this.del(key, function(e){
-      if (e) _this.__emit('error', new Error('unable to clear cache after item was updated elsewhere, key: ' + key))
+      if (e) _this.__emit('error', new CacheError('unable to clear cache after item was updated elsewhere, key: ' + key, e));
     });
 
   }, function(e){
@@ -192,7 +234,12 @@ InternalCache.prototype.get = function(key, callback){
 
       if (e) return callback(e);
       //exists in redis, so we update LRU
-      if (found) _this.__updateLRUCache(key, found, callback);
+      if (found) return _this.__updateLRUCache(key, found, function(e, updated){
+        if (e) return callback(e);
+        callback(null, updated);
+      });
+
+      return callback(null, null);
 
     });
 
@@ -219,12 +266,8 @@ InternalCache.prototype.set = function(key, val, callback){
   });
 };
 
-InternalCache.prototype.reset = function(){
-
-};
-
 InternalCache.prototype.values = function(){
-
+  return this.__cache.values();
 };
 
 InternalCache.prototype.del = function(key, callback){
@@ -249,7 +292,7 @@ InternalCache.prototype.del = function(key, callback){
 
     clearTimeout(disposedTimeout);
 
-    callback(new Error('failed to remove item from the cache'));
+    callback(new CacheError('failed to remove item from the cache'));
 
   }, 5000);
 
@@ -282,15 +325,30 @@ InternalCache.prototype.disconnect =  Promise.promisify(function(callback){
 
   var _this = this;
 
-  if (_this.__cache.length == 0) return callback();
+  _this.__redisClient.quit();
 
-  async.eachSeries(_this.__cache.keys(),
-    function(key, keyCallback){
-      _this.__removeSubscription(key, keyCallback);
-    },
-    callback
-  );
+  _this.__redisPubsub.quit();
+
+  callback();
+
 });
+
+InternalCache.prototype.reset = function(callback){
+
+  var _this = this;
+
+  _this.__redisClient.flushdb( function (e, succeeded) {
+
+    if (e) return callback(e);
+
+    if (!succeeded) return callback(new CacheError('redis flush failed'));
+
+    _this.__redisPubsub.emit('system/cache-reset', {origin:_this.__cacheNodeId});
+
+    _this.__cache.reset();
+
+  });
+};
 
 function RedisLRUCache(opts) {
 
@@ -378,7 +436,7 @@ RedisLRUCache.prototype.get = Promise.promisify(function(key, opts, callback){
 
     var _this = this;
 
-    if (key == null || key == undefined) return callback(new Error('invalid key'));
+    if (key == null || key == undefined) return callback(new CacheError('invalid key'));
 
     if (typeof opts == 'function'){
       callback = opts;
@@ -434,7 +492,7 @@ RedisLRUCache.prototype.clear = Promise.promisify(function(callback){
 RedisLRUCache.prototype.set = Promise.promisify(function(key, val, callback){
   try{
 
-    if (key == null || key == undefined) return callback(new Error('invalid key'));
+    if (key == null || key == undefined) return callback(new CacheError('invalid key'));
 
     var cacheItem = {data:clone(val), key:key};
 
@@ -453,7 +511,7 @@ RedisLRUCache.prototype.set = Promise.promisify(function(key, val, callback){
 RedisLRUCache.prototype.remove = Promise.promisify(function(key, callback){
   try{
 
-    if (key == null || key == undefined) return callback(new Error('invalid key'));
+    if (key == null || key == undefined) return callback(new CacheError('invalid key'));
 
     this.__cache.del(key, callback);
 
