@@ -229,10 +229,11 @@ InternalCache.prototype.get = function(key, callback){
     //found something in memory
     if (returnValue) return callback(null, returnValue);
 
-    //maybe in redis, but no longer in LRU?
+    //maybe in redis, but no longer in LRU
     _this.__getFromRedisCache(key, function(e, found){
 
       if (e) return callback(e);
+
       //exists in redis, so we update LRU
       if (found) return _this.__updateLRUCache(key, found, function(e, updated){
         if (e) return callback(e);

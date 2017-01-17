@@ -34,6 +34,7 @@
     "underscore.string": "3.2.2"
   },
   "devDependencies": {
+    "commander": "2.9.0",
     "chai": "^3.2.0",
     "coveralls": "^2.11.6",
     "expect.js": "*",

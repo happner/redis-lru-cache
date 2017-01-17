@@ -16,6 +16,10 @@ life-cycle of a GET request:
 2. redis cache is checked for the item, if it exists LRU cache is updated and item is returned
 3. if there is a retrieveItem method attached to the options, it is called to produce the missing item, REDIS cache and LRU cache are both updated and item is returned
 
+life-cycle of a DEL request:
+
+1. item is removed from LRU cache
+2. unless called again, the item will eventually expire from the redis cache
 
 dependancies:
 -------------
