@@ -1,6 +1,6 @@
 {
   "name": "redis-lru-cache",
-  "description": "LRU cache, that relies on redis pub/sub to share data",
+  "description": "cluster friendly cache, that relies on redis pub/sub to share data",
   "version": "0.0.1",
   "main": "./lib/index",
   "scripts": {

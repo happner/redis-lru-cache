@@ -6,7 +6,7 @@ describe('benchmark tests', function() {
 
   var testId = require('shortid').generate();
 
-  var COUNT = 1000;
+  var COUNT = 5000;
 
   // before('should initialize the service', function(callback) {
   //   callback();
@@ -56,7 +56,7 @@ describe('benchmark tests', function() {
 
   var MULTIPLE_INSTANCE_COUNT = 10;
 
-  var MULTIPLE_INSTANCE_OPCOUNT = 10;
+  var MULTIPLE_INSTANCE_OPCOUNT = 1000;
 
   var randomCluster;
 

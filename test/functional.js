@@ -1,4 +1,4 @@
-describe('stress tests', function() {
+describe('functional tests', function() {
 
   this.timeout(20000);
 
@@ -139,7 +139,6 @@ describe('stress tests', function() {
   });
 
   it('gets data from from redis', function(callback) {
-
 
     this.timeout(10000);
 
