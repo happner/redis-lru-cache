@@ -76,14 +76,19 @@ TestCluster.prototype.verifyConsistency = function(callback){
         //
         // console.log('totals:::', _this.__consistencyTotals[idUpItem]);
 
-        async.eachSeries(_this.__consistencyTotals[idUpItem], function(logItem, idUpItemCB){
+        var deduplicateMessages = {};
+
+        async.eachSeries(_this.__consistencyTotals[idUpItem], function(logItem, logItemCB){
 
           //console.log('checking consistency log item:::', logItem);
 
+          var timedOut = false;
+
           var doGetTimeout = setTimeout(function(){
-            //console.log('ttl miss');
+            console.log('ttl miss:::');
             misses++;
-            idUpItemCB();
+            timedOut = true;
+            logItemCB();
           }, 1000);
 
           _this.__clients[idDownItem].remote.on('message', function(serialized){
@@ -113,11 +118,20 @@ TestCluster.prototype.verifyConsistency = function(callback){
 
               deserialized.message.message.key == logItem.key){
 
-              clearTimeout(doGetTimeout);
+              if (deduplicateMessages[deserialized.message.message.key]){
 
-              if (deserialized.message.data == null || deserialized.message.data.test != logItem.value.test) misses++;
+                console.log('duplicate message:::', JSON.stringify(deserialized.message));
+                clearTimeout(doGetTimeout);
+              } else {
 
-              idUpItemCB();
+                deduplicateMessages[deserialized.message.message.key] = true;
+
+                clearTimeout(doGetTimeout);
+
+                if (deserialized.message.data == null || deserialized.message.data.test != logItem.value.test) misses++;
+
+                logItemCB();
+              }
             }
           });
 
@@ -152,6 +166,8 @@ TestCluster.prototype.__handleRemoteMessage = function(serialized){
 
   if (message.event == "set-activity-run-complete"){
 
+    console.log('did set run:::', message.originId);
+
     _this.__started.push(message.originId);
 
     _this.__setTotals.push(message.message.totals);
@@ -159,6 +175,8 @@ TestCluster.prototype.__handleRemoteMessage = function(serialized){
   }
 
   if (message.event == "get-activity-run-complete"){
+
+    console.log('did get run', message.originId);
 
     _this.__completed.push(message.originId);
 

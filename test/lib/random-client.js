@@ -124,6 +124,7 @@ RandomClient.prototype.startSetActivity = function(opts){
   var SETCOUNTER = 0;
   var ERRCOUNTER = 0;
   var TRIEDCOUNTER = 0;
+
   var STARTED = Date.now();
   var ENDED;
   var DURATION;
@@ -179,6 +180,41 @@ RandomClient.prototype.startSetActivity = function(opts){
     testId:opts.testId,
     stop:function(){this.setActivityIsRunning = false;}.bind(_this)
   };
+};
+
+RandomClient.prototype.__getRandomLogItems = function(logs, amount){
+
+  var randomItems = [];
+
+  var usedAlready = {};
+
+  var getRandomIndex = function(){
+
+    var foundIndex = -1;
+
+    while(foundIndex == -1){
+
+      var checkIndex = Math.floor(Math.random() * (logs.length - 1)) + 1;
+
+      if (!usedAlready[checkIndex]){
+
+        if (logs[checkIndex] == null) {
+          console.log('dodge, no log item at index ' + checkIndex)
+          continue;
+        }
+
+        foundIndex = checkIndex;
+        usedAlready[foundIndex] = true;
+      }
+    }
+    return foundIndex;
+  };
+
+  for (var i = 0; i < amount; i ++){
+    randomItems.push(logs[getRandomIndex()]);
+  }
+
+  return randomItems;
 };
 
 RandomClient.prototype.startGetActivity = function(opts) {
@@ -309,7 +345,10 @@ RandomClient.prototype.startGetActivity = function(opts) {
         return;
       }
 
-      if (opts.consistency) consistencyItems = logs.slice(0, opts.consistency);
+      if (opts.consistency) consistencyItems = _this.__getRandomLogItems(logs, opts.consistency);
+
+      console.log('consistencyAmount:::', opts.consistency);
+      console.log('consistencyItems:::', consistencyItems);
 
       _this.__emit('initial-sets-complete', doGetActivity());
 

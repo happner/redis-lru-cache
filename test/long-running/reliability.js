@@ -2,13 +2,13 @@ describe('reliability tests', function() {
 
   this.timeout(20000);
 
-  var INITIAL_SETS = 1000; //how many initial sets per node
+  var INITIAL_SETS = 2000; //how many initial sets per node
 
   var GETS = 1000; //how many gets per node
 
-  var MULTIPLE_INSTANCE_COUNT = 5;
+  var MULTIPLE_INSTANCE_COUNT = 8;
 
-  var CONSISTENCY = 500; // how many sets are logged for consistency verification, per node
+  var CONSISTENCY = 250; // how many sets are logged for consistency verification, per node
 
   require('events').EventEmitter.defaultMaxListeners = Infinity;
 
@@ -16,7 +16,7 @@ describe('reliability tests', function() {
 
     var _this = this;
 
-    _this.timeout(MULTIPLE_INSTANCE_COUNT * 30000);
+    _this.timeout(MULTIPLE_INSTANCE_COUNT * 600000);
 
     var testId = require('shortid').generate();
 

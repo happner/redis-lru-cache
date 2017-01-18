@@ -348,14 +348,28 @@ InternalCache.prototype.reset = function(callback){
 
     _this.__cache.reset();
 
+    callback();
+
   });
 };
 
 function RedisLRUCache(opts) {
 
-  this.__cache = new InternalCache(opts);
+  var _this = this;
 
-  this.__eventEmitter = new EventEmitter();
+  _this.__cache = new InternalCache(opts);
+
+  _this.__eventEmitter = new EventEmitter();
+
+  if (opts.clear){
+
+    _this.clear(function(e){
+
+      if (e) return _this.__emit('error', new CacheError('failed clearing cache on startup', e));
+
+      _this.__emit('cleared-on-startup', opts)
+    });
+  }
 }
 
 RedisLRUCache.prototype.__emit = function (key, data) {
@@ -486,8 +500,8 @@ RedisLRUCache.prototype.get = Promise.promisify(function(key, opts, callback){
 });
 
 RedisLRUCache.prototype.clear = Promise.promisify(function(callback){
-  if (this.__cache) this.__cache.reset();
-  callback();
+  if (this.__cache) this.__cache.reset(callback);
+  else callback(new Error('no cache available for reset'));
 });
 
 RedisLRUCache.prototype.set = Promise.promisify(function(key, val, callback){

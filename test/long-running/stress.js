@@ -4,9 +4,13 @@ describe('stress tests', function() {
 
   var testId = require('shortid').generate();
 
+  var INITIAL_SETS = 10000; //how many initial sets per node
+
+  var GETS = 100000; //how many gets per node
+
   it('checks throughput per second single process, limited sets and gets', function(callback) {
 
-    this.timeout(60000);
+    this.timeout(600000);
 
     var RandomClient = require('../lib/random-client');
 
@@ -23,22 +27,20 @@ describe('stress tests', function() {
       callback();
     });
 
-    client.startGetActivity({initialSets:1000000, limit:1000000, log:false});
+    client.startGetActivity({initialSets:INITIAL_SETS, limit:GETS, log:false});
 
     //15k per second cache memory hits
   });
 
-  var INITIAL_SETS = 1000000; //how many initial sets per node
+  var MULTIPLE_INSTANCE_COUNT = 10;
 
-  var GETS = 1000000; //how many gets per node
+  var MULTIPLE_INSTANCE_GETS = 10000;
 
-  var MULTIPLE_INSTANCE_COUNT = 5;
-
-  it('checks random sets and gets, over ' + MULTIPLE_INSTANCE_COUNT + ' instances, ensuring there is consistency throughout the various nodes', function(callback) {
+  it('does ' + INITIAL_SETS + ' initial sets and ' + MULTIPLE_INSTANCE_GETS + ' gets, over ' + MULTIPLE_INSTANCE_COUNT + ' instances', function(callback) {
 
     var _this = this;
 
-    _this.timeout(MULTIPLE_INSTANCE_COUNT * 30000);
+    _this.timeout(MULTIPLE_INSTANCE_COUNT * 600000);
 
     var testId = require('shortid').generate();
 
@@ -46,7 +48,7 @@ describe('stress tests', function() {
 
     var testHelper = new TestHelper();
 
-    testHelper.getCluster(testId, MULTIPLE_INSTANCE_COUNT, INITIAL_SETS, GETS, function(e, cluster){
+    testHelper.getCluster(testId, MULTIPLE_INSTANCE_COUNT, INITIAL_SETS, MULTIPLE_INSTANCE_GETS, function(e, cluster){
 
       if (e) return callback(e);
 

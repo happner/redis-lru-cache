@@ -191,9 +191,37 @@ describe('stress tests', function() {
     });
   });
 
-  it('clears the cache', function(){
+  it('clears a cache', function(callback){
 
+    var cacheServiceClear = new  service({
+      cacheId:'redis-lru-cache-test-clear'
+    });
 
+    cacheServiceClear.set('/RESET_TEST/1234', {test:"data"}, function(e){
+
+      if (e) return callback(e);
+
+      cacheServiceClear.get('/RESET_TEST/1234', function(e, data){
+
+        if (e) return callback(e);
+
+        expect(data.test).to.be("data");
+
+        cacheServiceClear.clear(function(e){
+
+          if (e) return callback(e);
+
+          cacheServiceClear.get('/RESET_TEST/1234', function(e, data) {
+
+            if (e) return callback(e);
+
+            expect(data).to.be(null);
+
+            callback();
+          });
+        });
+      });
+    });
 
   });
 
