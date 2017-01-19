@@ -10,6 +10,8 @@ describe('reliability tests', function() {
 
   var CONSISTENCY = 250; // how many sets are logged for consistency verification, per node
 
+  var DELCONSISTENCY = 100; // how many deletes are logged for consistency verification, per node
+
   require('events').EventEmitter.defaultMaxListeners = Infinity;
 
   it('checks random sets and gets, over ' + MULTIPLE_INSTANCE_COUNT + ' instances, ensuring there is consistency throughout the various nodes', function(callback) {
@@ -34,13 +36,24 @@ describe('reliability tests', function() {
 
         cluster.verifyConsistency(function(e, misses){
 
-          cluster.end();
-
           if (e) return callback(e);
 
           if (misses > 0) return callback(new Error('consistency check failed, with ' + misses + ' misses.'));
 
-          callback();
+          console.log('checking deletion consistency:::');
+
+          cluster.verifyDelConsistency(function(e, found, failures){
+
+            cluster.end();
+
+            if (e) return callback(e);
+
+            if (found > 0) return callback(new Error('consistency check failed, with ' + found + ' unexpectedly found.'));
+
+            if (failures > 0) return callback(new Error('consistency check failed, with ' + failures + ' failed.'));
+
+            callback();
+          });
         });
       });
 
@@ -49,7 +62,7 @@ describe('reliability tests', function() {
         console.log('STARTED:::');
       });
 
-    }, CONSISTENCY);
+    }, CONSISTENCY, DELCONSISTENCY);
   });
 
 });

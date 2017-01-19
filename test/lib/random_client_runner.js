@@ -27,6 +27,7 @@ commander
   .option('--id [string]', 'ID of this runner')
   .option('--cache_id [string]', 'ID of this runner')
   .option('--consistency [string]', 'do some consistency updates')
+  .option('--delConsistency [string]', 'do some delete consistency operations')
   .parse(process.argv);
 
 var mode = commander.mode ? commander.mode : 'throughput_over_duration';
@@ -40,6 +41,8 @@ var init = commander.init ? parseInt(commander.init) : 1000;
 var defer = commander.defer;
 
 var consistency = commander.consistency ? parseInt(commander.consistency) : 0;
+
+var delConsistency = commander.delConsistency ? parseInt(commander.delConsistency) : 0;
 
 var cacheid = commander.cache_id;
 
@@ -55,7 +58,7 @@ var clientOpts = {
 
 var START = Date.now();
 
-console.log('starting random cache:::', clientOpts);
+//console.log('starting random cache:::', clientOpts);
 
 var randomClient = new RandomClient(clientOpts);
 
@@ -70,7 +73,7 @@ randomClient.on('get-activity-run-complete', function(message){
 
   trySend('get-activity-run-complete', message);
 
-  console.log('RUN-COMPLETE');
+  //console.log('RUN-COMPLETE');
 
 });
 
@@ -80,7 +83,7 @@ var doGet = function(message){
 
   randomClient.cache().get(message.key, function(e, data){
 
-    if (e) trySend('cache-get-failed', {message:message, error:e.toString()});
+    if (e) return trySend('cache-get-failed', {message:message, error:e.toString()});
 
     trySend('cache-get-complete', {message:message, data:data});
   });
@@ -90,9 +93,22 @@ var doSet = function(message){
 
   randomClient.cache().set(message.key, message.data, function(e, response){
 
-    if (e) trySend('cache-set-failed', {message:message, error:e.toString()});
+    if (e) return trySend('cache-set-failed', {message:message, error:e.toString()});
 
     trySend('cache-set-complete', {message:message, response:response});
+  });
+};
+
+var doDelete = function(message){
+
+  randomClient.deleteAll(message.items, function(e){
+
+    //console.log('DELETED ALL:::', e);
+
+    if (e) return trySend('delete-all-failed', {message:message, error:e.toString()});
+
+    trySend('delete-all-complete', {message:message});
+
   });
 };
 
@@ -109,6 +125,7 @@ var doRun = function(){
       testId:testId,
       initialSets:init,
       consistency:consistency,
+      delConsistency:delConsistency,
       log:true
     });
 
@@ -119,9 +136,9 @@ var doRun = function(){
       initialSets:init,
       limit:size,
       consistency:consistency,
+      delConsistency:delConsistency,
       log:true
     });
-
   }
 };
 
@@ -134,6 +151,8 @@ process.on('message', function(serialized){
   if (message.type == 'doSet') doSet(message);
 
   if (message.type == 'doGet') doGet(message);
+
+  if (message.type == 'doDeleteAll') doDelete(message);
 
 });
 

@@ -64,6 +64,8 @@ function InternalCache(opts){
 
     _this.__eventEmitter = new EventEmitter();
 
+    _this.__eventEmitter.setMaxListeners(100);
+
     if (!opts.redis) opts.redis = {};
 
     opts.redis.prefix = _this.__cacheId;
@@ -170,7 +172,8 @@ InternalCache.prototype.__updateLRUCache = function(key, item, callback){
     //origin introduced to alleviate tail chasing
     if (message.origin != _this.__cacheNodeId) return _this.del(key, function(e){
       if (e) _this.__emit('error', new CacheError('unable to clear cache after item was updated elsewhere, key: ' + key, e));
-    });
+
+    }, true);//noRedis is true, as this has been removed elsewhere
 
   }, function(e){
 
@@ -202,6 +205,17 @@ InternalCache.prototype.__getFromRedisCache = function(key, callback){
 
     callback(null, null);
 
+  });
+};
+
+InternalCache.prototype.__redisDel = function(key, callback){
+
+  var _this = this;
+
+  _this.__redisClient.del(key, function(e){
+
+    if (e) return callback(new CacheError('failed to remove item from the redis cache'));
+    callback();
   });
 };
 
@@ -271,10 +285,20 @@ InternalCache.prototype.values = function(){
   return this.__cache.values();
 };
 
-InternalCache.prototype.del = function(key, callback){
+InternalCache.prototype.del = function(key, callback, noRedis){
 
   var _this = this;
-  //only remove the item from the LRU cache, and unsubscribe, redis will take care of itself, as it will eventually time out.
+
+  if (!_this.__cache.has(key)) {
+
+    return _this.__redisDel(key, function(e){
+
+      if (e) return callback(e);
+
+      _this.__publishChange(key, null, callback);
+    });
+  }
+
   var disposedTimeout;
 
   var disposedHandler = function(disposedKey){
@@ -285,7 +309,9 @@ InternalCache.prototype.del = function(key, callback){
 
       _this.off('item-disposed', disposedHandler);
 
-      return callback();
+      if (noRedis) return callback();
+
+      _this.__redisDel(key, callback);
     }
   };
   //wait 5 seconds, then call back with a failure
@@ -293,7 +319,9 @@ InternalCache.prototype.del = function(key, callback){
 
     clearTimeout(disposedTimeout);
 
-    callback(new CacheError('failed to remove item from the cache'));
+    _this.off('item-disposed', disposedHandler);
+
+    callback(new CacheError('failed to remove item from the LRU cache'));
 
   }, 5000);
 

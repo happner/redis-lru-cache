@@ -17,6 +17,8 @@ function TestCluster(){
   this.__getTotals = [];
 
   this.__consistencyTotals = {};
+
+  this.__delConsistencyTotals = {};
 }
 
 TestCluster.prototype.__emit = function(event, message){
@@ -69,23 +71,23 @@ TestCluster.prototype.verifyConsistency = function(callback){
 
       if (idDownItem != idUpItem){
 
-        console.log('checking consistency checking ' + idUpItem + '\'s data on ' + idDownItem);
+        //console.log('checking consistency checking ' + idUpItem + '\'s data on ' + idDownItem);
 
-        // console.log('idDownItem:::', idDownItem);
-        // console.log('idUpItem:::', idUpItem);
+        // //console.log('idDownItem:::', idDownItem);
+        // //console.log('idUpItem:::', idUpItem);
         //
-        // console.log('totals:::', _this.__consistencyTotals[idUpItem]);
+        // //console.log('totals:::', _this.__consistencyTotals[idUpItem]);
 
         var deduplicateMessages = {};
 
         async.eachSeries(_this.__consistencyTotals[idUpItem], function(logItem, logItemCB){
 
-          //console.log('checking consistency log item:::', logItem);
+          ////console.log('checking consistency log item:::', logItem);
 
           var timedOut = false;
 
           var doGetTimeout = setTimeout(function(){
-            console.log('ttl miss:::');
+            //console.log('ttl miss:::');
             misses++;
             timedOut = true;
             logItemCB();
@@ -95,8 +97,8 @@ TestCluster.prototype.verifyConsistency = function(callback){
 
             var deserialized = JSON.parse(serialized);
 
-            // console.log('have cache-get-complete message:::?', deserialized);
-            // console.log('have cache-get-complete logItem:::?', logItem);
+            // //console.log('have cache-get-complete message:::?', deserialized);
+            // //console.log('have cache-get-complete logItem:::?', logItem);
 
             // var logItemExample = {
             //   key: 'SkbYETsUl_1/0',
@@ -120,7 +122,7 @@ TestCluster.prototype.verifyConsistency = function(callback){
 
               if (deduplicateMessages[deserialized.message.message.key]){
 
-                console.log('duplicate message:::', JSON.stringify(deserialized.message));
+                //console.log('duplicate message:::', JSON.stringify(deserialized.message));
                 clearTimeout(doGetTimeout);
               } else {
 
@@ -147,10 +149,164 @@ TestCluster.prototype.verifyConsistency = function(callback){
 
     if (e) return callback(e);
 
-    //console.log('CALLING BACK WITH MISSES:::', misses);
+    ////console.log('CALLING BACK WITH MISSES:::', misses);
 
     callback(null, misses);
 
+  });
+};
+
+TestCluster.prototype.verifyDelConsistencyItemsDontExist = function(clientKey, items, callback){
+
+  var _this = this;
+
+  var client = _this.__clients[clientKey];
+
+  var found = 0;
+
+  var foundItems = [];
+
+  var failed = 0;
+
+  var deduplicateMessages = {};
+
+  async.each(items, function(item, itemCB){
+
+    var doGetTimeout = setTimeout(function(){
+
+      //console.log('ttl del get miss:::');
+      failed++;
+      itemCB();
+
+    }, 1000);
+
+    client.remote.on('message', function(serialized){
+
+      var deserialized = JSON.parse(serialized);
+
+      if (deserialized.message.message.key === item.key){
+
+        //console.log('deserialized:::', deserialized);
+
+        if (deduplicateMessages[deserialized.message.message.key]){
+
+          //console.log('duplicate message:::', JSON.stringify(deserialized.message));
+
+          clearTimeout(doGetTimeout);
+
+        } else {
+
+          deduplicateMessages[deserialized.message.message.key] = true;
+
+          clearTimeout(doGetTimeout);
+
+          if (deserialized.message.data != null) {
+
+            foundItems.push(deserialized.message.message);
+            found++;
+          }
+
+          itemCB();
+        }
+      }
+    });
+
+    //console.log('item.key:::',item.key);
+    client.remote.send(JSON.stringify({type:'doGet', key:item.key}));
+
+  }, function(e){
+
+    if (found > 0){
+      console.log('DAMN FOUND THE FOLLOWING ON ' + clientKey + ':::', foundItems);
+    }
+
+    //console.log('verifyDelConsistencyItemsDontExist:::', e, found, failed);
+
+    callback(e, found, failed);
+  });
+
+};
+
+TestCluster.prototype.verifyDelConsistency = function(callback){
+
+  var _this = this;
+
+  var idDown = Object.keys(_this.__delConsistencyTotals);
+
+  var idUp = Object.keys(_this.__delConsistencyTotals).reverse();
+
+  var pairs = [];
+
+  idDown.forEach(function(idDownItem, i){
+    pairs.push([idDownItem, idUp[i]]);
+  });
+
+  var found = 0;
+
+  var failed = 0;
+
+  async.eachSeries(pairs, function(pair, pairCB){
+
+    var idDownItem = pair[0];
+
+    var idUpItem = pair[1];
+
+    console.log('del consistency deleting ' + idUpItem + '\'s from ' + idDownItem);
+
+    var toDeleteItems = _this.__delConsistencyTotals[idUpItem];
+
+    console.log('TO DELETE:::', toDeleteItems);
+
+    var timedOut = false;
+
+    var doDelTimeout = setTimeout(function(){
+      //console.log('ttl del miss:::');
+      misses++;
+      timedOut = true;
+      pairCB();
+    }, 300000);
+
+    _this.__clients[idDownItem].remote.on('message', function(serialized){
+
+      var deserialized = JSON.parse(serialized);
+
+      if (deserialized.event == 'delete-all-failed' &&
+        deserialized.message.message.key === idUpItem){
+
+        clearTimeout(doDelTimeout);
+
+        return pairCB(new Error('delete all failed: ' + deserialized.message.error));
+      }
+
+      if (deserialized.event == 'delete-all-complete' &&
+        deserialized.message.message.key === idUpItem){
+
+        clearTimeout(doDelTimeout);
+
+        setTimeout(function(){
+
+          _this.verifyDelConsistencyItemsDontExist(idUpItem, toDeleteItems, function(e, vfound, vfailed){
+
+            if (e) return pairCB(e);
+
+            found += vfound;
+
+            failed += vfailed;
+
+            pairCB();
+          });
+
+        }, 5000);
+      }
+    });
+
+    _this.__clients[idDownItem].remote.send(JSON.stringify({type:'doDeleteAll', key:idUpItem, items:toDeleteItems}));
+
+  }, function(e){
+
+    if (e) return callback(e);
+    ////console.log('CALLING BACK WITH MISSES:::', misses);
+    callback(null, found, failed);
   });
 };
 
@@ -166,7 +322,7 @@ TestCluster.prototype.__handleRemoteMessage = function(serialized){
 
   if (message.event == "set-activity-run-complete"){
 
-    console.log('did set run:::', message.originId);
+    //console.log('did set run:::', message.originId);
 
     _this.__started.push(message.originId);
 
@@ -176,7 +332,7 @@ TestCluster.prototype.__handleRemoteMessage = function(serialized){
 
   if (message.event == "get-activity-run-complete"){
 
-    console.log('did get run', message.originId);
+    //console.log('did get run', message.originId);
 
     _this.__completed.push(message.originId);
 
@@ -184,6 +340,9 @@ TestCluster.prototype.__handleRemoteMessage = function(serialized){
 
     if (message.message.consistency)
       _this.__consistencyTotals[message.originId] = message.message.consistency;
+
+    if (message.message.delConsistency)
+      _this.__delConsistencyTotals[message.originId] = message.message.delConsistency;
 
     if (_this.__completed.length == Object.keys(_this.__clients).length)
       _this.__emit('cluster-run-complete', _this.__aggregateTotals());
@@ -229,7 +388,7 @@ TestCluster.prototype.end = function(){
     try{
 
       client.remote.kill();
-      console.log('killed remote:::', clientId);
+      //console.log('killed remote:::', clientId);
     }catch(e){
       console.warn('failed killing remote client: ' + clientId);
     }
@@ -240,7 +399,7 @@ function TestHelper(){
 
 }
 
-TestHelper.prototype.getCluster = function(testId, size, init, clientSize, callback, consistency){
+TestHelper.prototype.getCluster = function(testId, size, init, clientSize, callback, consistency, delConsistency){
 
   var testCluster = new TestCluster();
 
@@ -277,6 +436,13 @@ TestHelper.prototype.getCluster = function(testId, size, init, clientSize, callb
 
       arguments.push('--consistency');
       arguments.push(consistency);
+    }
+
+    if (delConsistency){
+      // will do consistency amount of random sets and add them to the final log
+
+      arguments.push('--delConsistency');
+      arguments.push(delConsistency);
     }
 
     testCluster.addClient(arguments, timeCB);

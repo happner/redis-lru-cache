@@ -42,6 +42,26 @@ RandomClient.prototype.cache = function(){
   return this.__cache;
 };
 
+RandomClient.prototype.deleteAll = function(items, callback){
+
+  var _this = this;
+
+  async.each(items, function(item, itemCB){
+
+    //console.log('IN DELETE ALL:::', item.key);
+
+    _this.__cache.remove(item.key, function(e){
+
+      console.log('REMOVED:::', item.key);
+
+      if (e) return itemCB(e);
+
+      itemCB();
+    });
+
+  }, callback);
+};
+
 RandomClient.prototype.startSetActivitySequential = function(opts, callback){
 
   var _this = this;
@@ -156,7 +176,7 @@ RandomClient.prototype.startSetActivity = function(opts){
       ENDED = Date.now();
       DURATION = ENDED - STARTED;
 
-      console.log('did ' + SETCOUNTER + ' cache sets out of ' + TRIEDCOUNTER + ' attempts in ' + DURATION + ' milliseconds with ' + ERRCOUNTER + ' FAILURES');
+      //console.log('did ' + SETCOUNTER + ' cache sets out of ' + TRIEDCOUNTER + ' attempts in ' + DURATION + ' milliseconds with ' + ERRCOUNTER + ' FAILURES');
 
       _this.setActivityTotals[opts.testId] = {
         testId:opts.testId,
@@ -182,11 +202,21 @@ RandomClient.prototype.startSetActivity = function(opts){
   };
 };
 
-RandomClient.prototype.__getRandomLogItems = function(logs, amount){
+RandomClient.prototype.__getRandomLogItems = function(logs, amount, exclude){
 
   var randomItems = [];
 
   var usedAlready = {};
+
+  var excludeList = {};
+
+  if (exclude){
+    exclude.forEach(function(item){
+      //console.log('excludeItem:::', item.key);
+      excludeList[item.key] = true;
+    });
+
+  }
 
   var getRandomIndex = function(){
 
@@ -196,10 +226,16 @@ RandomClient.prototype.__getRandomLogItems = function(logs, amount){
 
       var checkIndex = Math.floor(Math.random() * (logs.length - 1)) + 1;
 
-      if (!usedAlready[checkIndex]){
+      var checkItem = logs[checkIndex];
+
+      //console.log('checkItem:::', excludeList[checkItem.key] == null, usedAlready[checkIndex]);
+
+      if (!usedAlready[checkIndex] && excludeList[checkItem.key] == null){
+
+        //console.log('OK:::');
 
         if (logs[checkIndex] == null) {
-          console.log('dodge, no log item at index ' + checkIndex)
+          //console.log('dodge, no log item at index ' + checkIndex);
           continue;
         }
 
@@ -243,6 +279,8 @@ RandomClient.prototype.startGetActivity = function(opts) {
   }
 
   var consistencyItems;
+
+  var delConsistencyItems;
 
   var doGetActivity = function () {
 
@@ -297,7 +335,7 @@ RandomClient.prototype.startGetActivity = function(opts) {
         ENDED = Date.now();
         DURATION = ENDED - STARTED;
 
-        console.log('did ' + GETCOUNTER + ' cache gets out of ' + (TRIEDCOUNTER - 1) + ' attempts in ' + DURATION + ' milliseconds with ' + ERRCOUNTER + ' FAILURES');
+        //console.log('did ' + GETCOUNTER + ' cache gets out of ' + (TRIEDCOUNTER - 1) + ' attempts in ' + DURATION + ' milliseconds with ' + ERRCOUNTER + ' FAILURES');
 
         _this.getActivityTotals[opts.testId] = {
           testId: opts.testId,
@@ -310,15 +348,18 @@ RandomClient.prototype.startGetActivity = function(opts) {
           errors: ERRCOUNTER,
           hits:HITCOUNTER,
           misses:MISSCOUNTER,
-          consistency:consistencyItems
+          consistency:consistencyItems,
+          delConsistency:delConsistencyItems
         };
 
         var completeMessage = {
           totals:_this.getActivityTotals[opts.testId],
-          logs:_this.getActivityLogs[opts.testId],
+          logs:_this.getActivityLogs[opts.testId]
         };
 
         if (consistencyItems) completeMessage.consistency = consistencyItems;
+
+        if (delConsistencyItems) completeMessage.delConsistency = delConsistencyItems;
 
         _this.__emit('get-activity-run-complete', completeMessage);
       }
@@ -336,7 +377,7 @@ RandomClient.prototype.startGetActivity = function(opts) {
 
   if (opts.initialSets > 0) {
 
-    var log = opts.consistency > 0 ? true : opts.log;
+    var log = (opts.consistency > 0 || opts.delConsistency) ? true : opts.log;
 
     _this.startSetActivitySequential({testId: opts.testId, limit: opts.initialSets, log:log}, function(e, totals, logs){
 
@@ -345,10 +386,29 @@ RandomClient.prototype.startGetActivity = function(opts) {
         return;
       }
 
-      if (opts.consistency) consistencyItems = _this.__getRandomLogItems(logs, opts.consistency);
+      if (opts.consistency) {
 
-      console.log('consistencyAmount:::', opts.consistency);
-      console.log('consistencyItems:::', consistencyItems);
+        consistencyItems = _this.__getRandomLogItems(logs, opts.consistency);
+
+        //console.log('consistencyAmount:::', opts.consistency);
+        //console.log('consistencyItems:::', consistencyItems.length);
+      }
+
+      if (opts.delConsistency) {
+
+        delConsistencyItems = _this.__getRandomLogItems(logs, opts.delConsistency, consistencyItems);
+
+        //console.log('delConsistencyAmount:::', opts.delConsistency);
+        //console.log('delConsistencyItems:::', delConsistencyItems.length);
+
+        //this happens elsewhere, when we are verifying
+        // return _this.__deleteAll(delConsistencyItems, function(e){
+        //
+        //   if (e) _this.__emit('error', new Error('failed deleting delConsistency list'));
+        //
+        //   _this.__emit('initial-sets-complete', doGetActivity());
+        // });
+      }
 
       _this.__emit('initial-sets-complete', doGetActivity());
 
