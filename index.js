@@ -108,17 +108,17 @@ function InternalCache(opts){
 
     _this.__systemSubscriptions['system/redis-error'] = _this.__redisClient.on('error', function(error){
 
-        _this.emit('error', new CacheError('redis client error', error));
+        _this.__emit('error', new CacheError('redis client error', error));
     });
 
     _this.__systemSubscriptions['system/redis-error'] = _this.__redisPubsub.on('error', function(error){
 
-      _this.emit('error', new CacheError('redis pubsub error', error));
+      _this.__emit('error', new CacheError('redis pubsub error', error));
     });
 
     if (opts.clear) _this.reset(function(e){
 
-      if (e) return _this.emit('error', new CacheError('cache clear on startup failed', e));
+      if (e) return _this.__emit('error', new CacheError('cache clear on startup failed', e));
     });
 
   }catch(e){
